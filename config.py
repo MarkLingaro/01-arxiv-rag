@@ -31,12 +31,13 @@ ARXIV_CATEGORIES = {
     "Fluid Dynamics": "physics.flu-dyn"
 }
 
-# -- Embedding settings --
+# -- Gemini settings --
 EMBEDDING_MODEL = "models/gemini-embedding-2"  # Gemini embedding model
 EMBEDDING_DIMENSIONS = 3072  # Gemini embedding dimension
+CHAT_MODEL = "models/gemini-2.5-flash"  # Gemini chat model
 
 # -- Ingestion settings --
-DEFAULT_MAX_RESULTS = 100  # Default number of papers to fetch per category
+DEFAULT_MAX_RESULTS = 50  # Default number of papers to fetch per category
 DEFAULT_DELAY_SECONDS = 3.0
 DEFAULT_NUM_RETRIES = 3
 

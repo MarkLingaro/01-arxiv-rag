@@ -6,7 +6,7 @@ The FastAPI application. Defines the HTTP endpoints exposed by the backend.
 Run locally with:
     uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 """
-
+import logging
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
@@ -14,6 +14,13 @@ from fastapi.responses import StreamingResponse
 from app.embeddings import embed_query, generate_answer_stream
 from app.database import search_papers
 
+# -- Logging --
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 # --Create the FastAPI app instance --
 app = FastAPI(
@@ -63,17 +70,13 @@ def health_check():
 # -- search endpoint --
 @app.post("/search", response_model=SearchResponse)
 def search(request: SearchRequest):
-    """
-    Semantic search over the papers database.
-    Returns the top-K most relevant papers for the query.
-    """
     try:
+        logger.info(f"Search request: '{request.query[:60]}...' top_k={request.top_k}")
         query_vector = embed_query(request.query)
         papers = search_papers(query_vector, top_k=request.top_k)
         return SearchResponse(query=request.query, results=papers)
     except Exception as e:
-        # Wrap any failure in an HTTP error so the client sees a clean
-        # response.
+        logger.exception("Error in /search endpoint")
         raise HTTPException(status_code=500, detail=str(e))
 
 # -- chat endpoint --
@@ -114,28 +117,41 @@ ANSWER:"""
 def chat(request: ChatRequest):
     """
     Retrieval-augmented chat.
-    1. Find papers most relevant to the question
-    2. Build a prompt with those papers as context
-    3. Stream Gemini's answer back token by token
+
+    Errors that happen BEFORE streaming starts (auth, embedding failure,
+    no papers) raise proper HTTP errors with status codes.
+
+    Errors that happen DURING streaming get embedded as [ERROR] messages
+    inside the stream — see generate_answer_stream() in embeddings.py.
     """
     try:
+        # These run before streaming starts — real HTTP errors are possible
+        logger.info(f"Chat request received: '{request.query[:60]}...'")
+
         query_vector = embed_query(request.query)
         papers = search_papers(query_vector, top_k=request.top_k)
 
         if not papers:
+            logger.warning("No papers found in database for chat request")
             raise HTTPException(
                 status_code=404,
-                detail="No papers found in the database",
+                detail=(
+                    "No papers found in the database. "
+                    "Run embed_papers.py and load_to_db.py first to ingest papers."
+                ),
             )
 
         prompt = build_rag_prompt(request.query, papers)
+        logger.info(f"Streaming response for {len(papers)} retrieved papers")
+
         return StreamingResponse(
             generate_answer_stream(prompt),
             media_type="text/plain",
         )
 
     except HTTPException:
+        # Re-raise — don't wrap in another 500
         raise
     except Exception as e:
+        logger.exception("Unhandled error in /chat endpoint")
         raise HTTPException(status_code=500, detail=str(e))
-    
