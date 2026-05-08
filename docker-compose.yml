@@ -1,0 +1,29 @@
+# docker-compose.yml
+# Defines the local development env for this project
+# Run with: docker compose up -d
+# Stop with: docker compose down
+
+services:
+  db:
+    # The image is the pre-packaged Postgres+pgvector container.
+    # pgvector/pgvector is a community image that bundles them together. 
+    image: pgvector/pgvector:pg16
+
+    container_name: arxiv-db
+    restart: unless-stopped
+
+    #environment vars
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+
+    ports:
+      - "${DB_PORT}:5432"
+
+    #Persist the db even if container is destroyed
+    volumes:
+      - arxiv_pgdata:/var/lib/postgresql/data
+
+volumes:
+  arxiv_pgdata:
