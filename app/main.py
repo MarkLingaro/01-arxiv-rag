@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from fastapi.responses import StreamingResponse
 from app.embeddings import embed_query, generate_answer_stream
 from app.database import search_papers
+from config import ARXIV_CATEGORIES
 
 # -- Logging --
 
@@ -155,3 +156,12 @@ def chat(request: ChatRequest):
     except Exception as e:
         logger.exception("Unhandled error in /chat endpoint")
         raise HTTPException(status_code=500, detail=str(e))
+    
+# -- Fetch category labels (for frontend dropdown) --
+@app.get("/categories")
+def list_categories():
+    """
+    Return the list of arXiv categories and their labels.
+    The frontend calls this to populate the category filter dropdown.
+    """
+    return {"categories": list(ARXIV_CATEGORIES.keys())}

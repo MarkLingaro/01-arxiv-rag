@@ -1,0 +1,30 @@
+# docker/Dockerfile.backend
+# Builds the FastAPI backend container.
+# Build from the project root:
+#   docker build -f docker/Dockerfile.backend -t arxiv-rag-backend .
+
+# -- Base image --
+# python:3.12-slim is Debian + Python 3.12, stripped down to ~150MB.
+FROM python:3.12-slim
+
+# -- Working directory --
+WORKDIR /app
+
+# -- System dependencies --
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends libpq5 && \
+    rm -rf /var/lib/apt/lists/*
+
+# -- Python dependencies --
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# -- Application code --
+COPY app/ ./app/
+COPY config.py .   
+
+# -- Networking --
+EXPOSE 8000
+
+# -- Start the server --
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0", "--port", "8000"]

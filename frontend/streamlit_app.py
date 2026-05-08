@@ -1,17 +1,27 @@
 import os
 import requests
 import streamlit as st
-import sys
-from pathlib import Path
 
-# Add the project root to Python's import path 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from config import ARXIV_CATEGORIES
 
 # -- Configuration --
 # Default to localhost:8000 for local development.
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
+
+@st.cache_data(ttl=300)
+def fetch_categories():
+    """
+    Get the list of categories from the backend.
+    Cached for 5 minutes so we don't hit the API on every interaction.
+    """
+    try:
+        response = requests.get(f"{API_BASE_URL}/categories", timeout=5)
+        if response.status_code == 200:
+            return response.json()["categories"]
+    except Exception:
+        pass
+    return []
+
 
 ## -- Page setup --
 st.set_page_config(
@@ -40,14 +50,17 @@ with st.sidebar:
 
     st.divider()
 
-    # Category filter — populated from config.py, single source of truth
-    st.subheader("Filter")
+categories = fetch_categories()
+if categories:
     selected_category = st.selectbox(
         "Category",
-        options=["All categories"] + list(ARXIV_CATEGORIES.keys()),
+        options=["All categories"] + categories,
     )
+else:
+    st.warning("Cannot fetch categories — is the backend running?")
+    selected_category = "All categories"
 
-    top_k = st.slider("Number of results", 1, 20, 5)
+top_k = st.slider("Number of results", 1, 20, 5)
 
 # -- Tabs for Search and Chat --
 tab_search, tab_chat = st.tabs(["🔍 Search", "💬 Chat"])

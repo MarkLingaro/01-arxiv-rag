@@ -1,0 +1,47 @@
+# Virtual environment — recreated inside the container
+.venv/
+venv/
+env/
+
+# Python cache files
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS junk
+.DS_Store
+
+# Documentation and tutorial files
+*.md
+session-*-instructions.md
+
+# Environment files — secrets injected at runtime, never baked in
+.env
+.envrc
+
+# Generated data
+papers_with_embeddings.json
+*.log
+
+# Test outputs
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Tutorial helpers
+bulk_ingest.py
+
+# Docker build outputs
+**/*.dockerignore

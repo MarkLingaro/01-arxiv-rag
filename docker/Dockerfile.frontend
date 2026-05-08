@@ -1,0 +1,27 @@
+# docker/Dockerfile.frontend
+# Builds the Streamlit frontend container.
+# Build from the project root:
+#   docker build -f docker/Dockerfile.frontend -t arxiv-rag-frontend .
+
+# -- Base image --
+# python:3.12-slim is Debian + Python 3.12, stripped down to ~150MB.
+FROM python:3.12-slim
+
+# -- Working directory --
+WORKDIR /app
+
+# -- Python dependencies --
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# -- Application code --
+COPY frontend/ ./frontend/
+
+# -- Networking --
+EXPOSE 8501
+
+# -- Start the Streamlit app --
+CMD ["streamlit", "run", "frontend/streamlit_app.py", \
+    "--server.address=0.0.0.0", \
+    "--server.port=8501", \
+    "--server.headless=true"]
