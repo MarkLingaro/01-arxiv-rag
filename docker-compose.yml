@@ -1,29 +1,64 @@
 # docker-compose.yml
-# Defines the local development env for this project
-# Run with: docker compose up -d
+# Defines the local development stack: database + backend + frontend.
+# Run all three with: docker compose up -d
 # Stop with: docker compose down
 
 services:
-  db:
-    # The image is the pre-packaged Postgres+pgvector container.
-    # pgvector/pgvector is a community image that bundles them together. 
-    image: pgvector/pgvector:pg16
 
+  # ── Database ────────────────────────────────────────────────────────────────
+  db:
+    image: pgvector/pgvector:pg16
     container_name: arxiv-db
     restart: unless-stopped
-
-    #environment vars
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
-
     ports:
       - "${DB_PORT}:5432"
-
-    #Persist the db even if container is destroyed
     volumes:
       - arxiv_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Backend (FastAPI) ───────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    container_name: arxiv-backend
+    restart: unless-stopped
+    environment:
+      # Inside the docker network, the database is reachable by service name "db"
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── Frontend (Streamlit) ────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    container_name: arxiv-frontend
+    restart: unless-stopped
+    environment:
+      # Inside the docker network, the backend is reachable by service name "backend"
+      API_BASE_URL: http://backend:8000
+    ports:
+      - "8501:8501"
+    depends_on:
+      - backend
 
 volumes:
   arxiv_pgdata:
