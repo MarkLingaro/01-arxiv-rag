@@ -1,0 +1,118 @@
+# .github/workflows/deploy.yml
+#
+# Deploys backend and frontend to Cloud Run on every push to main.
+# Uses Workload Identity Federation — no long-lived credentials needed.
+
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+
+# Required for Workload Identity Federation
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    name: Build and Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── Checkout code ───────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Authenticate with GCP ───────────────────────────────────────────────
+      # Workload Identity Federation — no JSON key file needed.
+      # GitHub proves its identity to GCP using OIDC tokens.
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      # ── Set up gcloud CLI ───────────────────────────────────────────────────
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      # ── Configure Docker for Artifact Registry ──────────────────────────────
+      - name: Configure Docker
+        run: |
+          gcloud auth configure-docker ${{ secrets.GCP_REGION }}-docker.pkg.dev --quiet
+
+      # ── Set shared variables ────────────────────────────────────────────────
+      - name: Set environment variables
+        run: |
+          echo "REGISTRY=${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/arxiv-rag" >> $GITHUB_ENV
+          echo "INSTANCE_CONNECTION_NAME=$(gcloud sql instances describe arxiv-db --format='value(connectionName)')" >> $GITHUB_ENV
+
+      # ── Build and push backend ──────────────────────────────────────────────
+      # linux/amd64 target matches Cloud Run's architecture.
+      - name: Build and push backend image
+        run: |
+          docker build --platform linux/amd64 \
+            -f docker/Dockerfile.backend \
+            -t ${{ env.REGISTRY }}/backend:latest \
+            -t ${{ env.REGISTRY }}/backend:${{ github.sha }} \
+            .
+          docker push ${{ env.REGISTRY }}/backend:latest
+          docker push ${{ env.REGISTRY }}/backend:${{ github.sha }}
+
+      # ── Build and push frontend ─────────────────────────────────────────────
+      - name: Build and push frontend image
+        run: |
+          docker build --platform linux/amd64 \
+            -f docker/Dockerfile.frontend \
+            -t ${{ env.REGISTRY }}/frontend:latest \
+            -t ${{ env.REGISTRY }}/frontend:${{ github.sha }} \
+            .
+          docker push ${{ env.REGISTRY }}/frontend:latest
+          docker push ${{ env.REGISTRY }}/frontend:${{ github.sha }}
+
+      # ── Deploy backend to Cloud Run ─────────────────────────────────────────
+      # Always use 'gcloud run deploy' with FULL settings.
+      # Never use 'gcloud run services update' — partial updates reset other
+      # settings to defaults, breaking the Cloud SQL connection.
+      - name: Deploy backend
+        run: |
+          gcloud run deploy arxiv-backend \
+            --image=${{ env.REGISTRY }}/backend:${{ github.sha }} \
+            --region=${{ secrets.GCP_REGION }} \
+            --platform=managed \
+            --allow-unauthenticated \
+            --add-cloudsql-instances=${{ env.INSTANCE_CONNECTION_NAME }} \
+            --set-env-vars="DB_HOST=/cloudsql/${{ env.INSTANCE_CONNECTION_NAME }},DB_PORT=5432,DB_USER=arxiv,DB_NAME=arxiv" \
+            --set-secrets="DB_PASSWORD=db-password:latest,GEMINI_API_KEY=gemini-api-key:latest" \
+            --memory=1Gi \
+            --cpu=1 \
+            --max-instances=3 \
+            --port=8000
+
+      # ── Deploy frontend to Cloud Run ────────────────────────────────────────
+      - name: Get backend URL
+        run: |
+          echo "BACKEND_URL=$(gcloud run services describe arxiv-backend --region=${{ secrets.GCP_REGION }} --format='value(status.url)')" >> $GITHUB_ENV
+
+      - name: Deploy frontend
+        run: |
+          gcloud run deploy arxiv-frontend \
+            --image=${{ env.REGISTRY }}/frontend:${{ github.sha }} \
+            --region=${{ secrets.GCP_REGION }} \
+            --platform=managed \
+            --allow-unauthenticated \
+            --set-env-vars="API_BASE_URL=${{ env.BACKEND_URL }}" \
+            --memory=512Mi \
+            --cpu=1 \
+            --max-instances=2 \
+            --port=8501
+
+      # ── Print URLs ──────────────────────────────────────────────────────────
+      - name: Print deployment URLs
+        run: |
+          echo "Backend:  $(gcloud run services describe arxiv-backend --region=${{ secrets.GCP_REGION }} --format='value(status.url)')"
+          echo "Frontend: $(gcloud run services describe arxiv-frontend --region=${{ secrets.GCP_REGION }} --format='value(status.url)')"
