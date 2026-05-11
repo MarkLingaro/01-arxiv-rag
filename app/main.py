@@ -66,7 +66,7 @@ def health_check():
     Simple liveness endpoint.
     Cloud platforms ping this to know the service is running.
     """
-    return {"status": "ok"}
+    return {"status": "ok", "version": "1.1.0"}
 
 # -- search endpoint --
 @app.post("/search", response_model=SearchResponse)
