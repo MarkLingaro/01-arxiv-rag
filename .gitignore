@@ -224,7 +224,3 @@ bulk_ingest.py
 # Ingestion staging — these are large JSON files with embeddings
 ingestion/staging/*.json
 ingestion/archive/*.json
-
-# Ingestion staging — these are large JSON files with embeddings
-ingestion/staging/*.json
-ingestion/archive/*.json
