@@ -12,6 +12,7 @@ Add new categories here as needed.
 
 # Full list of arXiv categories can be found here: https://arxiv.org/category_taxonomy
 import os
+from urllib.parse import quote_plus
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -37,7 +38,6 @@ EMBEDDING_DIMENSIONS = 3072  # Gemini embedding dimension
 CHAT_MODEL = "models/gemini-2.5-flash"  # Gemini chat model
 
 # -- Ingestion settings --
-DEFAULT_MAX_RESULTS = 50  # Default number of papers to fetch per category
 DEFAULT_DELAY_SECONDS = 3.0
 DEFAULT_NUM_RETRIES = 3
 
@@ -62,4 +62,14 @@ if not DB_PASSWORD:
     )
 
 # Convenient connection string format used by Postgres clients
-DB_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+# DB_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+
+#DB URL cloudrun/GCP
+# Cloud SQL Unix socket: DB_HOST starts with /cloudsql/
+# Local TCP: DB_HOST is something like 'localhost' or 'db'
+if DB_HOST.startswith("/cloudsql/"):
+    # Unix socket — host goes in query string, no port
+    DB_URL = f"postgresql://{DB_USER}:{quote_plus(DB_PASSWORD)}@/{DB_NAME}?host={DB_HOST}"
+else:
+    # Standard TCP connection
+    DB_URL = f"postgresql://{DB_USER}:{quote_plus(DB_PASSWORD)}@{DB_HOST}:{DB_PORT}/{DB_NAME}"

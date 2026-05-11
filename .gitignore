@@ -220,3 +220,11 @@ __marimo__/
 # Generated data files
 papers_with_embeddings.json
 bulk_ingest.py
+
+# Ingestion staging — these are large JSON files with embeddings
+ingestion/staging/*.json
+ingestion/archive/*.json
+
+# Ingestion staging — these are large JSON files with embeddings
+ingestion/staging/*.json
+ingestion/archive/*.json
